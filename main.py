@@ -3,10 +3,14 @@ import random
 import time
 from datetime import datetime
 
+def abrirLog():
+    return open("entregas.txt", "w")
+
 # Função para escrever mensagens no arquivo 'entregas.txt'
 def escreverLog(mensagem):
-    with open("entregas.txt", "a") as arquivoLog:
-        arquivoLog.write(mensagem + "\n")
+    global arquivoLog
+    # with open("entregas.txt", "a") as arquivoLog:
+    arquivoLog.write(mensagem + "\n")
 
 # Classe de ponto de redistribuição
 class Ponto:
@@ -60,44 +64,45 @@ class Pacote:
 
 # Classe para representar um Veiculo
 class Veiculo(threading.Thread):
-    def __init__(self, id, capacidade, pontos):
+    def __init__(self, id):
         threading.Thread.__init__(self)
         self.id = id
-        self.capacidade = capacidade
-        self.pontos = pontos
+        self.capacidade = A
         self.encomendas = []
 
     def run(self):
         """Execução do thread de um veiculo."""
         while True:
             # Escolher um ponto aleatório para começar
-            local_atual = random.choice(self.pontos)
+            local_atual = random.choice(pontos)
 
             # Tentar carregar encomendas neste ponto
             local_atual.semaforo.acquire()
-            escreverLog(f"Veiculo {self.id} chegou ao ponto {local_atual.id}.")
-            
-            # Carregar encomendas (não ultrapassando a capacidade do Veiculo)
-            while len(self.encomendas) < self.capacidade:
-                pacote = local_atual.get_package()
-                if pacote:  # Se houver encomenda no ponto, carrega
-                    pacote.horaCarregamento = datetime.now()
-                    self.encomendas.append(pacote)
-                    escreverLog(f"Veiculo {self.id} carregou a encomenda {pacote.id} em {local_atual.id}.")
-                else:
+            try:
+                print(f"Veiculo {self.id} chegou ao ponto {local_atual.id}.")
+                
+                # Carregar encomendas (não ultrapassando a capacidade do Veiculo)
+                while len(self.encomendas) <= self.capacidade:
+                    pacote = local_atual.get_package()
+                    if pacote:  # Se houver encomenda no ponto, carrega
+                        pacote.horaCarregamento = datetime.now()
+                        self.encomendas.append(pacote)
+                        self.capacidade -= 1
+                        print(f"Veiculo {self.id} carregou a encomenda {pacote.id} em {local_atual.id}.")
+                    else:
+                        break
+
+                # Simular o tempo de viagem até o próximo ponto (aleatório)
+                time.sleep(random.uniform(0.5, 2.0))
+
+                if not self.encomendas:
+                    print(f"Veiculo {self.id} finalizou as entregas.")
                     break
-            local_atual.semaforo.release()
+            finally:
+                local_atual.semaforo.release()
 
-            # Simular o tempo de viagem até o próximo ponto (aleatório)
-            time.sleep(random.uniform(0.5, 2.0))
-
-            if not self.encomendas:
-                escreverLog(f"Veiculo {self.id} finalizou as entregas.")
-                break
-
-            # Escolher o próximo ponto (pode ser o próximo na lista ou aleatório)
-            pontoDestino = random.choice(self.pontos)
-            escreverLog(f"Veiculo {self.id} esta viajando de {local_atual.id} para {pontoDestino.id}.")
+            pontoDestino = pontos[(pontos.index(local_atual) + 1) % S]
+            print(f"Veiculo {self.id} esta viajando de {local_atual.id} para {pontoDestino.id}.")
 
             # Simula o descarregamento das encomendas no ponto de destino
             for pacote in self.encomendas:
@@ -106,38 +111,31 @@ class Veiculo(threading.Thread):
             # Limpar a carga do Veiculo após descarregar as encomendas
             self.encomendas = []
 
-def main():
-    # Definição dos parâmetros
-    S = 5  # Pontos de redistribuição
-    C = 3  # Veiculos
-    P = 10  # Encomendas
-    A = 2  # Capacidade do Veiculo
+# Definição dos parâmetros
+try:
+    S = int(input("Quantidade de pontos de redistribuição: "))
+    C = int(input("Quantidade de veículos: "))
+    P = int(input("Quantidade de encomendas: "))
+    A = int(input("Capacidade de carga de cada veículo: "))
+except ValueError:
+    print("Entrada inválida. Todos os argumentos devem ser números inteiros.")
+    exit()
 
-# try:
-#     S = int(input("Quantidade de pontos de redistribuição: "))
-#     C = int(input("Quantidade de veículos: "))
-#     P = int(input("Quantidade de encomendas: "))
-#     A = int(input("Capacidade de carga de cada veículo: "))
-# except ValueError:
-#     print("Entrada inválida. Todos os argumentos devem ser números inteiros.")
-#     exit()
+arquivoLog = abrirLog()
 
-    pontos = [Ponto(i) for i in range(S)]
+pontos = [Ponto(i) for i in range(S)]
 
-    pacotes = [Pacote(i, pontos[random.randint(0, S-1)], pontos[random.randint(0, S-1)]) for i in range(P)]
+pacotes = [Pacote(i, pontos[random.randint(0, S-1)], pontos[random.randint(0, S-1)]) for i in range(P)]
 
-    for pacote in pacotes:
-        pacote.origem.add_package(pacote)
+for pacote in pacotes:
+    pacote.origem.add_package(pacote)
 
-    veiculos = [Veiculo(i, A, pontos) for i in range(C)]
+veiculos = [Veiculo(i) for i in range(C)]
 
-    for veiculo in veiculos:
-        veiculo.start()
+for veiculo in veiculos:
+    veiculo.start()
 
-    for veiculo in veiculos:
-        veiculo.join()
+for veiculo in veiculos:
+    veiculo.join()    
 
-    escreverLog("[Finalizado] Simulacao terminada.")
-
-if __name__ == "__main__":
-    main()
+escreverLog("[Finalizado] Simulacao terminada.")
