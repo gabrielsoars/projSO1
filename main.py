@@ -3,18 +3,21 @@ import random
 import time
 from datetime import datetime
 
+encomendasEntregues = 0
+
+# Função para abrir o arquivo de log "entregas.txt"
 def abrirLog():
     return open("entregas.txt", "w")
 
 # Função para escrever mensagens no arquivo 'entregas.txt'
 def escreverLog(mensagem):
     global arquivoLog
-    # with open("entregas.txt", "a") as arquivoLog:
     arquivoLog.write(mensagem + "\n")
 
 # Classe de ponto de redistribuição
-class Ponto:
+class Ponto(threading.Thread):
     def __init__(self, id):
+        super().__init__()
         self.id = id
         self.fila = []
         self.semaforo = threading.Semaphore()
@@ -24,14 +27,18 @@ class Ponto:
         self.fila.append(pacote)
 
     def get_package(self):
-        """Retirar uma encomenda da fila do ponto de redistribuiaoo (se houver)."""
+        """Retirar uma encomenda da fila do ponto de redistribuição (se houver)."""
         if self.fila:
             return self.fila.pop(0)
         return None
+    
+    def run(self):
+        print(f"Ponto {self.id} aberto.")
 
 # Classe para representar uma encomenda
-class Pacote:
+class Pacote(threading.Thread):
     def __init__(self, id, origem, destino):
+        super().__init__()
         self.id = id
         self.origem = origem
         self.destino = destino
@@ -40,16 +47,17 @@ class Pacote:
         self.idVeiculo = None
         self.horaCriacao = datetime.now()
 
-    def entregar(self, idVeiculo):
+    def entregar(self, veiculo):
+        global encomendasEntregues
+
         """Simula o descarregamento da encomenda no ponto de destino."""
         self.horaEntrega = datetime.now()
-        self.idVeiculo = idVeiculo
+        self.idVeiculo = veiculo.id
         
-        # Log para o arquivo de entregas
-        escreverLog(f"Encomenda {self.id} entregue em {self.destino.id} (via veiculo {idVeiculo})")
-        
-        # Gerar arquivo de rastro da encomenda
-        self.gerarRastro()
+        veiculo.capacidade += 1
+        encomendasEntregues += 1
+        veiculo.encomendas.remove(self)
+        print(f"Veiculo {veiculo.id} entregou a encomenda {self.id} em {self.destino.id}.")
 
     def gerarRastro(self):
         """Gera o rastro da encomenda no arquivo 'entregas.txt'."""
@@ -58,24 +66,29 @@ class Pacote:
         dadosRastro += f"Chegada ao ponto de origem: {self.horaCriacao}\n"
         dadosRastro += f"Carregada no veiculo {self.idVeiculo} às: {self.horaCarregamento}\n"
         dadosRastro += f"Descarregada em {self.destino.id} às: {self.horaEntrega}\n"
+        dadosRastro += f"Entregue pelo veiculo {self.idVeiculo}\n"
         
         # Salvar o rastro no arquivo 'entregas.txt'
         escreverLog(dadosRastro)
 
+    def run(self):
+        self.origem.add_package(self)
+
 # Classe para representar um Veiculo
 class Veiculo(threading.Thread):
     def __init__(self, id):
-        threading.Thread.__init__(self)
+        super().__init__()
         self.id = id
         self.capacidade = A
         self.encomendas = []
 
     def run(self):
         """Execução do thread de um veiculo."""
-        while True:
-            # Escolher um ponto aleatório para começar
-            local_atual = random.choice(pontos)
 
+        # Escolher um ponto aleatório para começar
+        local_atual = random.choice(pontos)
+
+        while True:
             # Tentar carregar encomendas neste ponto
             local_atual.semaforo.acquire()
             try:
@@ -103,13 +116,12 @@ class Veiculo(threading.Thread):
 
             pontoDestino = pontos[(pontos.index(local_atual) + 1) % S]
             print(f"Veiculo {self.id} esta viajando de {local_atual.id} para {pontoDestino.id}.")
+            local_atual = pontoDestino
 
             # Simula o descarregamento das encomendas no ponto de destino
             for pacote in self.encomendas:
-                pacote.entregar(self.id)
-
-            # Limpar a carga do Veiculo após descarregar as encomendas
-            self.encomendas = []
+                if (pacote.destino == pontoDestino):
+                    pacote.entregar(self)
 
 # Definição dos parâmetros
 try:
@@ -125,10 +137,19 @@ arquivoLog = abrirLog()
 
 pontos = [Ponto(i) for i in range(S)]
 
+for ponto in pontos:
+    ponto.start()
+
+for ponto in pontos:
+    ponto.join()
+
 pacotes = [Pacote(i, pontos[random.randint(0, S-1)], pontos[random.randint(0, S-1)]) for i in range(P)]
 
 for pacote in pacotes:
-    pacote.origem.add_package(pacote)
+    pacote.start()
+
+for pacote in pacotes:
+    pacote.join()
 
 veiculos = [Veiculo(i) for i in range(C)]
 
@@ -136,6 +157,11 @@ for veiculo in veiculos:
     veiculo.start()
 
 for veiculo in veiculos:
-    veiculo.join()    
+    veiculo.join()
 
+escreverLog(f"Entregas planejadas: {P}")
+escreverLog(f"Entregas realizadas: {encomendasEntregues}\n")
+for pacote in pacotes:
+    pacote.gerarRastro()
 escreverLog("[Finalizado] Simulacao terminada.")
+arquivoLog.close()
